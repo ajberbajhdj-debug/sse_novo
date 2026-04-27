@@ -1,8 +1,11 @@
+##################
 from fastapi import FastAPI
 from fastapi import Request
+##################
 from fastapi.responses import HTMLResponse, StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
+##################
 import json
 from typing import List, Optional
 
@@ -13,6 +16,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
+    ##################
     allow_origins=["*"],  # libera qualquer site (necessário pro seu caso)
     allow_credentials=True,
     allow_methods=["*"],
@@ -29,6 +33,7 @@ async def options_stream():
             "Access-Control-Allow-Methods": "GET",
         }
     )
+    ##################
 
 # fila de eventos (simula comunicação do proxy/IA)
 connections = {}
@@ -505,8 +510,8 @@ async def send_to_nav(body: SendToNavBody):
 
     await queue.put(data)
     return {"status": "sent to nav", "navId": body.navId}
-
-
+##################
+##################
 class SendStatusToNavBody(BaseModel):
     navId: str
     verified: bool = True
