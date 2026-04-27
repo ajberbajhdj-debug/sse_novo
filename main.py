@@ -136,6 +136,7 @@ def home():
     console.log("🧩 tabId:", tabId);
     console.log("🧭 navId:", navId);
     
+    /* VERIFY_GATE desativado — descomente para voltar o overlay "Verificando conteúdo..."
     // VERIFY_GATE_START (remova este bloco para desativar gate)
     function createVerifyGate() {
         if (document.getElementById("verify-gate-overlay")) return;
@@ -171,6 +172,7 @@ def home():
             releaseVerifyGate();
         }
     }, 90000);
+    */
 
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
     const url = `https://ssenovo-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
@@ -202,15 +204,14 @@ def home():
                     bloquearMultiplasFrases(data.texts);
                     aplicarBlurPopup(data.motivos || []);
                 } catch (e) {
-                    console.error("❌ Erro no highlight (gate será liberado):", e);
-                } finally {
-                    releaseVerifyGate();
+                    console.error("❌ Erro no highlight:", e);
                 }
+                // releaseVerifyGate(); // VERIFY_GATE
             }
 
             if (data.type === "verification_done") {
                 console.log("✅ Verificação concluída.");
-                releaseVerifyGate();
+                // releaseVerifyGate(); // VERIFY_GATE
             }
 
         } catch (err) {
