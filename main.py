@@ -1,11 +1,8 @@
-##################
 from fastapi import FastAPI
 from fastapi import Request
-##################
 from fastapi.responses import HTMLResponse, StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
-##################
 import json
 from typing import List, Optional
 
@@ -16,7 +13,6 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    ##################
     allow_origins=["*"],  # libera qualquer site (necessário pro seu caso)
     allow_credentials=True,
     allow_methods=["*"],
@@ -33,12 +29,28 @@ async def options_stream():
             "Access-Control-Allow-Methods": "GET",
         }
     )
-    ##################
 
 # fila de eventos (simula comunicação do proxy/IA)
 connections = {}
 # correlaciona um navId (emitido pelo mitmproxy por carregamento) à mesma fila do SSE
 nav_connections = {}
+# Mensagens recebidas antes do browser abrir o EventSource (evita gate preso em corrida)
+_PENDING_NAV_MAX = 32
+pending_nav_messages: dict[str, list[str]] = {}
+
+
+def _buffer_nav_message(nav_id: str, data: str) -> None:
+    if not nav_id:
+        return
+    bucket = pending_nav_messages.setdefault(nav_id, [])
+    if len(bucket) >= _PENDING_NAV_MAX:
+        bucket.pop(0)
+    bucket.append(data)
+
+
+async def _drain_pending_to_queue(nav_id: str, queue: asyncio.Queue) -> None:
+    for msg in pending_nav_messages.pop(nav_id, []):
+        await queue.put(msg)
 
 @app.get("/")
 def home():
@@ -153,7 +165,13 @@ def home():
     }
     createVerifyGate();
     // VERIFY_GATE_END
-    
+    setTimeout(function () {
+        if (document.getElementById("verify-gate-overlay")) {
+            console.warn("⏱️ VERIFY_GATE: timeout — liberando overlay por segurança");
+            releaseVerifyGate();
+        }
+    }, 90000);
+
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
     const url = `https://ssenovo-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
     const evtSource = new EventSource(url);
@@ -180,16 +198,18 @@ def home():
 
             if (data.type === "highlight") {
                 console.log("🚨 Highlight acionado com frases:", data.texts);
-
-                bloquearMultiplasFrases(data.texts);
-                aplicarBlurPopup(data.motivos || []);
-                // VERIFY_GATE_RELEASE
-                releaseVerifyGate();
+                try {
+                    bloquearMultiplasFrases(data.texts);
+                    aplicarBlurPopup(data.motivos || []);
+                } catch (e) {
+                    console.error("❌ Erro no highlight (gate será liberado):", e);
+                } finally {
+                    releaseVerifyGate();
+                }
             }
 
             if (data.type === "verification_done") {
                 console.log("✅ Verificação concluída.");
-                // VERIFY_GATE_RELEASE
                 releaseVerifyGate();
             }
 
@@ -390,6 +410,7 @@ async def stream(
     queue = connections[clientId][tabId]
     if navId:
         nav_connections[navId] = queue
+        await _drain_pending_to_queue(navId, queue)
     print(f"🟢 Conectado: client={clientId} tab={tabId} nav={navId or '-'}")
 
     async def event_generator():
@@ -506,12 +527,13 @@ async def send_to_nav(body: SendToNavBody):
 
     queue = nav_connections.get(body.navId)
     if queue is None:
-        return {"status": "no active stream for navId", "navId": body.navId}
+        _buffer_nav_message(body.navId, data)
+        return {"status": "buffered until stream connects", "navId": body.navId}
 
     await queue.put(data)
     return {"status": "sent to nav", "navId": body.navId}
-##################
-##################
+
+
 class SendStatusToNavBody(BaseModel):
     navId: str
     verified: bool = True
@@ -529,7 +551,8 @@ async def send_status_to_nav(body: SendStatusToNavBody):
 
     queue = nav_connections.get(body.navId)
     if queue is None:
-        return {"status": "no active stream for navId", "navId": body.navId}
+        _buffer_nav_message(body.navId, data)
+        return {"status": "buffered until stream connects", "navId": body.navId}
 
     await queue.put(data)
     return {"status": "status sent to nav", "navId": body.navId}
