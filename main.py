@@ -420,11 +420,20 @@ async def stream(
     async def event_generator():
         try:
             yield "retry: 300\n\n"
+            ack = json.dumps({
+                "type": "stream_ack",
+                "navId": navId,
+                "clientId": clientId,
+                "tabId": tabId,
+            })
+            print(f"📡 stream_ack enviado: navId={navId or '-'} client={clientId} tab={tabId}")
+            yield f"data: {ack}\n\n"
             yield ":\n\n"
 
             while True:
                 try:
                     data = await asyncio.wait_for(queue.get(), timeout=5)
+                    print(f"📡 stream data enviado para navId={navId or '-'}: {data[:140]}")
                     yield f"data: {data}\n\n"
                 except asyncio.TimeoutError:
                     yield ":\n\n"  # heartbeat
@@ -446,8 +455,9 @@ async def stream(
         event_generator(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "*",
             "Access-Control-Allow-Methods": "GET",
