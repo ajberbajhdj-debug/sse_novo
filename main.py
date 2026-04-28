@@ -131,10 +131,11 @@ def home():
     sessionStorage.setItem("tabId", tabId);
     
     const navId = crypto.randomUUID();
+    window.__RESIST_NAV_ID__ = navId;
 
     console.log("🆔 clientId:", clientId);
     console.log("🧩 tabId:", tabId);
-    console.log("🧭 navId:", navId);
+    console.log("%c🧭 navId (demo page — mitm usa o UUID do log)", "font-weight:bold;color:#22c55e", navId);
     
     /* VERIFY_GATE desativado — descomente para voltar o overlay "Verificando conteúdo..."
     // VERIFY_GATE_START (remova este bloco para desativar gate)
@@ -176,6 +177,7 @@ def home():
 
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
     const url = `https://ssenovo-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
+    console.log("[Resist SSE] EventSource URL:", url);
     const evtSource = new EventSource(url);
 
     // ✅ conexão aberta
@@ -412,6 +414,7 @@ async def stream(
     if navId:
         nav_connections[navId] = queue
         await _drain_pending_to_queue(navId, queue)
+        print(f"🟢 SSE stream navId registrado (POST /send-to-nav usa este id): {navId}")
     print(f"🟢 Conectado: client={clientId} tab={tabId} nav={navId or '-'}")
 
     async def event_generator():
@@ -529,9 +532,11 @@ async def send_to_nav(body: SendToNavBody):
     queue = nav_connections.get(body.navId)
     if queue is None:
         _buffer_nav_message(body.navId, data)
+        print(f"📤 send-to-nav BUFFERED (browser ainda não abriu /stream): navId={body.navId}")
         return {"status": "buffered until stream connects", "navId": body.navId}
 
     await queue.put(data)
+    print(f"📤 send-to-nav entregue na fila SSE: navId={body.navId} frases={len(body.frases)}")
     return {"status": "sent to nav", "navId": body.navId}
 
 
@@ -553,7 +558,9 @@ async def send_status_to_nav(body: SendStatusToNavBody):
     queue = nav_connections.get(body.navId)
     if queue is None:
         _buffer_nav_message(body.navId, data)
+        print(f"📤 send-status-to-nav BUFFERED: navId={body.navId}")
         return {"status": "buffered until stream connects", "navId": body.navId}
 
     await queue.put(data)
+    print(f"📤 send-status-to-nav entregue: navId={body.navId}")
     return {"status": "status sent to nav", "navId": body.navId}
