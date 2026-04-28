@@ -34,6 +34,8 @@ async def options_stream():
 connections = {}
 # correlaciona um navId (emitido pelo mitmproxy por carregamento) à mesma fila do SSE
 nav_connections = {}
+# controla streams ativos por (clientId, tabId, navId)
+active_streams: dict[tuple[str, str, str], int] = {}
 # Mensagens recebidas antes do browser abrir o EventSource (evita gate preso em corrida)
 _PENDING_NAV_MAX = 32
 pending_nav_messages: dict[str, list[str]] = {}
@@ -403,6 +405,9 @@ async def stream(
     tabId: str,
     navId: Optional[str] = None,
 ):
+    nav_key = navId or "-"
+    stream_key = (clientId, tabId, nav_key)
+    active_streams[stream_key] = active_streams.get(stream_key, 0) + 1
 
     if clientId not in connections:
         connections[clientId] = {}
@@ -415,7 +420,10 @@ async def stream(
         nav_connections[navId] = queue
         await _drain_pending_to_queue(navId, queue)
         print(f"🟢 SSE stream navId registrado (POST /send-to-nav usa este id): {navId}")
-    print(f"🟢 Conectado: client={clientId} tab={tabId} nav={navId or '-'}")
+    print(
+        f"🟢 Conectado: client={clientId} tab={tabId} nav={navId or '-'} "
+        f"| ativos={active_streams.get(stream_key, 0)}"
+    )
 
     async def event_generator():
         try:
@@ -442,14 +450,25 @@ async def stream(
                     break
 
         finally:
-            # 🔥 só executa quando a conexão REALMENTE fecha
-            print(f"🔴 Desconectado: {clientId} | {tabId} | nav={navId or '-'}")
-            if navId:
-                nav_connections.pop(navId, None)
-            connections.get(clientId, {}).pop(tabId, None)
+            # Evita corrida: só remove mapeamentos quando for o último stream ativo da chave
+            remaining = max(active_streams.get(stream_key, 1) - 1, 0)
+            if remaining == 0:
+                active_streams.pop(stream_key, None)
+            else:
+                active_streams[stream_key] = remaining
 
-            if clientId in connections and not connections[clientId]:
-                connections.pop(clientId)
+            print(
+                f"🔴 Desconectado: {clientId} | {tabId} | nav={navId or '-'} "
+                f"| ativos_restantes={remaining}"
+            )
+
+            if remaining == 0:
+                if navId and nav_connections.get(navId) is queue:
+                    nav_connections.pop(navId, None)
+                if connections.get(clientId, {}).get(tabId) is queue:
+                    connections.get(clientId, {}).pop(tabId, None)
+                if clientId in connections and not connections[clientId]:
+                    connections.pop(clientId)
 
     return StreamingResponse(
         event_generator(),
