@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+##force redeploy
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # libera qualquer site (necessário pro seu caso)
