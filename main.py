@@ -176,6 +176,15 @@ def home():
     }, 90000);
     */
 
+    // Sempre definido: libera gate quando main envia verification_done (páginas sem frase ofensiva).
+    function releaseVerifyGate() {
+        const gate = document.getElementById("verify-gate-overlay");
+        if (gate) gate.remove();
+        if (document.body) {
+            document.body.style.visibility = "visible";
+        }
+    }
+
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
     //const navId = window.__RESIST_NAV_ID__;
 
@@ -216,12 +225,12 @@ def home():
                 } catch (e) {
                     console.error("❌ Erro no highlight:", e);
                 }
-                // releaseVerifyGate(); // VERIFY_GATE
+                releaseVerifyGate();
             }
 
             if (data.type === "verification_done") {
                 console.log("✅ Verificação concluída.");
-                // releaseVerifyGate(); // VERIFY_GATE
+                releaseVerifyGate();
             }
 
         } catch (err) {
