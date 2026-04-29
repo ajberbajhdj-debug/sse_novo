@@ -11,7 +11,6 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-##force redeploy
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # libera qualquer site (necessário pro seu caso)
@@ -482,8 +481,9 @@ async def stream(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache, no-transform",
-            "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
+            # Evita compressao/interferencia de proxy em stream SSE.
+            "Content-Encoding": "identity",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "*",
             "Access-Control-Allow-Methods": "GET",
