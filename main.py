@@ -132,8 +132,7 @@ def home():
     const tabId = sessionStorage.getItem("tabId") || crypto.randomUUID();
     sessionStorage.setItem("tabId", tabId);
     
-    const navId = crypto.randomUUID();
-    window.__RESIST_NAV_ID__ = navId;
+    const navId = window.__RESIST_NAV_ID__
 
     console.log("🆔 clientId:", clientId);
     console.log("🧩 tabId:", tabId);
@@ -178,7 +177,14 @@ def home():
     */
 
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
+    const navId = window.__RESIST_NAV_ID__;
+
+    if (!navId) {
+        console.error("❌ navId não definido (mitm ainda não injetou)");
+    }
+
     const url = `https://ssenovo-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
+        
     console.log("[Resist SSE] EventSource URL:", url);
     const evtSource = new EventSource(url);
 
