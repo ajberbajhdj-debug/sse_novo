@@ -14,7 +14,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # libera qualquer site (necessário pro seu caso)
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -177,7 +177,7 @@ def home():
     */
 
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
-    const navId = window.__RESIST_NAV_ID__;
+    //const navId = window.__RESIST_NAV_ID__;
 
     if (!navId) {
         console.error("❌ navId não definido (mitm ainda não injetou)");
