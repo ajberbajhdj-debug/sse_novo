@@ -150,7 +150,7 @@ def home():
     // VERIFY_GATE_END
     
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
-    const url = `https://serverssetest-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
+    const url = `https://ssenovo-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
     const evtSource = new EventSource(url);
 
     // ✅ conexão aberta
