@@ -139,7 +139,7 @@ def home():
     console.log("🧩 tabId:", tabId);
     console.log("%c🧭 navId (demo page — mitm usa o UUID do log)", "font-weight:bold;color:#22c55e", navId);
     
-    /* VERIFY_GATE desativado — descomente para voltar o overlay "Verificando conteúdo..."
+    // VERIFY_GATE desativado — descomente para voltar o overlay "Verificando conteúdo..."
     // VERIFY_GATE_START (remova este bloco para desativar gate)
     function createVerifyGate() {
         if (document.getElementById("verify-gate-overlay")) return;
@@ -175,7 +175,7 @@ def home():
             releaseVerifyGate();
         }
     }, 90000);
-    */
+    //
 
     // 🚀 conecta no SSE (navId alinha com o fluxo do mitmproxy / logs)
     const url = `https://ssenovo-production.up.railway.app/stream?clientId=${encodeURIComponent(clientId)}&tabId=${encodeURIComponent(tabId)}&navId=${encodeURIComponent(navId)}`;
