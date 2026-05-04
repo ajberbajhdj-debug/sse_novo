@@ -272,55 +272,145 @@ def home():
         parent.removeChild(anchorEl);
     }
 
-    frases.forEach(frase => {
+    function shouldSkipTextNode(node) {
+        const p = node.parentElement;
+        if (!p) return true;
+        if (p.closest && p.closest(".redacted")) return true;
+        const tag = p.tagName;
+        if (tag === "SCRIPT" || tag === "STYLE" || tag === "NOSCRIPT") return true;
+        return false;
+    }
 
-        console.log("➡️ Procurando frase:", frase);
-
+    function collectRenderableTextNodes(rootEl) {
+        const out = [];
         const walker = document.createTreeWalker(
-            target,
+            rootEl,
             NodeFilter.SHOW_TEXT,
             null,
             false
         );
+        let n;
+        while (n = walker.nextNode()) {
+            if (shouldSkipTextNode(n)) continue;
+            out.push(n);
+        }
+        return out;
+    }
 
-        let node;
-
-        while (node = walker.nextNode()) {
-
-            const texto = node.nodeValue;
-
-            if (texto.includes(frase)) {
-
-                console.log("🚫 Frase encontrada:", frase);
-                const anchor = node.parentElement?.closest ? node.parentElement.closest("a") : null;
-
-                const partes = texto.split(frase);
-                const fragment = document.createDocumentFragment();
-
-                partes.forEach((parte, index) => {
-
-                    fragment.appendChild(
-                        document.createTextNode(parte)
-                    );
-
-                    if (index < partes.length - 1) {
-
-                        const span = document.createElement("span");
-                        span.className = "redacted";
-                        span.textContent = "[redacted]";
-
-                        fragment.appendChild(span);
-                    }
-                });
-
-                node.parentNode.replaceChild(fragment, node);
-
-                if (anchor) {
-                    console.log("🔗 Link removido por conter frase censurada");
-                    removerLink(anchor);
-                }
+    function findCrossNodeMatch(rootEl, needle) {
+        const needleNorm = String(needle || "").trim();
+        if (needleNorm.length < 2) return null;
+        const nodes = collectRenderableTextNodes(rootEl);
+        let haystack = "";
+        const starts = [];
+        for (let i = 0; i < nodes.length; i++) {
+            starts.push(haystack.length);
+            haystack += nodes[i].nodeValue;
+        }
+        const idx = haystack.indexOf(needleNorm);
+        if (idx === -1) return null;
+        const endPos = idx + needleNorm.length;
+        let si = -1, so = 0, ei = -1, eo = 0;
+        for (let i = 0; i < nodes.length; i++) {
+            const b = starts[i];
+            const len = nodes[i].nodeValue.length;
+            const nodeEnd = b + len;
+            if (si < 0 && idx < nodeEnd) {
+                si = i;
+                so = idx - b;
+            }
+            if (endPos <= nodeEnd) {
+                ei = i;
+                eo = endPos - b;
+                break;
             }
         }
+        if (si < 0 || ei < 0) return null;
+        return {
+            startNode: nodes[si],
+            startOffset: so,
+            endNode: nodes[ei],
+            endOffset: eo,
+        };
+    }
+
+    function redactCrossNodeOccurrences(rootEl, needle) {
+        const needleNorm = String(needle || "").trim();
+        if (needleNorm.length < 2) return;
+        let guard = 200;
+        while (guard-- > 0) {
+            const loc = findCrossNodeMatch(rootEl, needleNorm);
+            if (!loc) break;
+            const range = document.createRange();
+            try {
+                range.setStart(loc.startNode, loc.startOffset);
+                range.setEnd(loc.endNode, loc.endOffset);
+            } catch (e) {
+                console.warn("[Resist] Range inválido (DOM mudou):", e);
+                break;
+            }
+            const sc = range.startContainer;
+            const ec = range.endContainer;
+            const a1 = (sc.nodeType === 1 ? sc : sc.parentElement);
+            const a2 = (ec.nodeType === 1 ? ec : ec.parentElement);
+            const anchorStart = a1 && a1.closest ? a1.closest("a") : null;
+            const anchorEnd = a2 && a2.closest ? a2.closest("a") : null;
+
+            console.log("🚫 Frase (cross-node) encontrada:", needleNorm.slice(0, 80) + (needleNorm.length > 80 ? "…" : ""));
+            range.deleteContents();
+            const mark = document.createElement("span");
+            mark.className = "redacted";
+            mark.textContent = "[redacted]";
+            range.insertNode(mark);
+            if (anchorStart && anchorStart === anchorEnd) {
+                console.log("🔗 Link removido (trecho inteiro dentro de um <a>)");
+                removerLink(anchorStart);
+            }
+        }
+    }
+
+    function redactSingleNodeFallback(rootEl, frase) {
+        const walker = document.createTreeWalker(
+            rootEl,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+        );
+        let node;
+        while (node = walker.nextNode()) {
+            if (shouldSkipTextNode(node)) continue;
+            const texto = node.nodeValue;
+            if (!texto.includes(frase)) continue;
+            console.log("🚫 Frase (single-node) encontrada:", frase.slice(0, 80) + (frase.length > 80 ? "…" : ""));
+            const anchor = node.parentElement?.closest ? node.parentElement.closest("a") : null;
+            const partes = texto.split(frase);
+            const fragment = document.createDocumentFragment();
+            partes.forEach((parte, index) => {
+                fragment.appendChild(document.createTextNode(parte));
+                if (index < partes.length - 1) {
+                    const span = document.createElement("span");
+                    span.className = "redacted";
+                    span.textContent = "[redacted]";
+                    fragment.appendChild(span);
+                }
+            });
+            node.parentNode.replaceChild(fragment, node);
+            if (anchor) {
+                console.log("🔗 Link removido por conter frase censurada");
+                removerLink(anchor);
+            }
+        }
+    }
+
+    const ordered = [...frases]
+        .map((f) => String(f || "").trim())
+        .filter(Boolean)
+        .sort((a, b) => b.length - a.length);
+
+    ordered.forEach((frase) => {
+        console.log("➡️ Procurando frase:", frase.slice(0, 120) + (frase.length > 120 ? "…" : ""));
+        redactCrossNodeOccurrences(target, frase);
+        redactSingleNodeFallback(target, frase);
     });
 
     console.log("✅ Bloqueio concluído");
